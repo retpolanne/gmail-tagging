@@ -10,7 +10,7 @@ from googleapiclient.errors import HttpError
 
 def get_creds():
     # If modifying these scopes, delete the file token.pickle.
-    SCOPES = ['https://www.googleapis.com/auth/gmail.modify']
+    SCOPES = ['https://www.googleapis.com/auth/gmail.modify https://www.googleapis.com/auth/gmail.settings.basic']
     creds = None
     # The file token.pickle stores the user's access and refresh tokens, and is
     # created automatically when the authorization flow completes for the first
@@ -32,6 +32,29 @@ def get_creds():
     return creds
 
 
+def create_filter(service, from_mail, label_id):
+    filter = {
+        'criteria': {
+            'from': from_mail
+        },
+        'action': {
+            'addLabelIds': [label_id]
+        }
+    }
+    return service.users().settings().filters().create(userId='me',
+                                                    body=filter).execute()
+
+
+def get_label_id(service, label_name):
+    try:
+        labels = service.users().labels().list(userId='me').execute()
+        for label in labels.get('labels'):
+            if label.get('name') == label_name:
+                return label.get('id')
+    except HttpError as e:
+        if '409' not in str(e):
+            print(f"Unexpected error occurred {e}") 
+
 def main():
     service = build('gmail', 'v1', credentials=get_creds())
     f = open("domain-labels.json")
@@ -40,33 +63,46 @@ def main():
     for item in r:
         label = item.get("label")
         label_split = label.split("/")
+        label_id = ""
         try:
             print(f"Creating label {label_split[0]}")
             label_object = {
                 "name": label_split[0] 
             }
-#            label = service.users().labels().create(userId='me',
-#                                                body=label_object).execute()
-#            print(label['id'])
+            label = service.users().labels().create(userId='me',
+                                                body=label_object).execute()
+            label_id = label.get("id")
+            print(label_id)
         except HttpError as e:
             if '409' not in str(e):
                 print(f"Unexpected error occurred {e}") 
             else:
                 print(f"Label {label_split[0]} already exists")
+                label_id = get_label_id(service, label_split[0])
+                print(label_id)
         if len(label_split) >= 2:
             try:
                 print(f"Creating nested label {label}")
                 label_object = {
                     "name": label
                 }
-#                label = service.users().labels().create(userId='me',
-#                                                        body=label_object).execute()
-#                print(label['id'])
+                label = service.users().labels().create(userId='me',
+                                                        body=label_object).execute()
+                label_id = label.get("id")
+                print(label_id)
             except HttpError as e:
                 if '409' not in str(e):
                     print(f"Unexpected error occurred {e}") 
                 else:
                     print(f"Label {label} already exists")
+                    label_id = get_label_id(service, label)
+                    print(label_id)
+        try:
+            filter_id = create_filter(service, item.get("domain"), label_id)
+            print(filter_id)
+        except HttpError as e:
+            if '409' not in str(e):
+                print(f"Unexpected error occurred {e}") 
 
 
 if __name__ == '__main__':
