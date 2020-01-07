@@ -45,10 +45,9 @@ def create_filter(service, from_mail, label_id):
                                                     body=filter).execute()
 
 
-def get_label_id(service, label_name):
+def get_label_id(service, label_list, label_name):
     try:
-        labels = service.users().labels().list(userId='me').execute()
-        for label in labels.get('labels'):
+        for label in label_list.get('labels'):
             if label.get('name') == label_name:
                 return label.get('id')
     except HttpError as e:
@@ -60,6 +59,8 @@ def main():
     f = open("domain-labels.json")
     r = json.loads(f.read())
     domain_labels_list = []
+    current_labels = [cur_label for cur_label in service.users().labels().list(userId='me').execute().get('labels')]
+    print(f"Found {len(current_labels)} labels already created")
     for item in r:
         label = item.get("label")
         label_split = label.split("/")
@@ -73,12 +74,16 @@ def main():
                                                 body=label_object).execute()
             label_id = label.get("id")
             print(label_id)
+            current_labels.append({
+                'name': label_split[0],
+                'id': label_id
+            })
         except HttpError as e:
             if '409' not in str(e):
                 print(f"Unexpected error occurred {e}") 
             else:
                 print(f"Label {label_split[0]} already exists")
-                label_id = get_label_id(service, label_split[0])
+                label_id = get_label_id(service, current_labels, label_split[0])
                 print(label_id)
         if len(label_split) >= 2:
             try:
@@ -90,12 +95,16 @@ def main():
                                                         body=label_object).execute()
                 label_id = label.get("id")
                 print(label_id)
+                current_labels.append({
+                    'name': label,
+                    'id': label_id
+                })
             except HttpError as e:
                 if '409' not in str(e):
                     print(f"Unexpected error occurred {e}") 
                 else:
                     print(f"Label {label} already exists")
-                    label_id = get_label_id(service, label)
+                    label_id = get_label_id(service, current_labels, label)
                     print(label_id)
         try:
             filter_id = create_filter(service, item.get("domain"), label_id)
