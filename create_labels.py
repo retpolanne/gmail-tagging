@@ -47,7 +47,7 @@ def create_filter(service, from_mail, label_id):
 
 def get_label_id(service, label_list, label_name):
     try:
-        for label in label_list.get('labels'):
+        for label in label_list:
             if label.get('name') == label_name:
                 return label.get('id')
     except HttpError as e:
@@ -59,25 +59,34 @@ def main():
     f = open("domain-labels.json")
     r = json.loads(f.read())
     domain_labels_list = []
+    print("Getting current labels")
     current_labels = [cur_label for cur_label in service.users().labels().list(userId='me').execute().get('labels')]
     print(f"Found {len(current_labels)} labels already created")
+    print("Getting current filters")
+    current_filters = [cur_filter.get('criteria').get('from') for cur_filter in service.users().settings().filters().list(userId='me').execute().get('filter')]
+    print(f"Found {len(current_filters)} filters already created")
     for item in r:
         label = item.get("label")
         label_split = label.split("/")
         label_id = ""
         try:
             print(f"Creating label {label_split[0]}")
-            label_object = {
-                "name": label_split[0] 
-            }
-            label = service.users().labels().create(userId='me',
-                                                body=label_object).execute()
-            label_id = label.get("id")
-            print(label_id)
-            current_labels.append({
-                'name': label_split[0],
-                'id': label_id
-            })
+            if label_split[0] in current_labels:
+                print(f"Label {label_split[0]} already exists")
+                label_id = get_label_id(service, current_labels, label)
+                print(label_id)
+            else:
+                label_req = {
+                    "name": label_split[0] 
+                }
+                label_obj = service.users().labels().create(userId='me',
+                                                    body=label_req).execute()
+                label_id = label_obj.get("id")
+                print(label_id)
+                current_labels.append({
+                    'name': label_split[0],
+                    'id': label_id
+                })
         except HttpError as e:
             if '409' not in str(e):
                 print(f"Unexpected error occurred {e}") 
@@ -87,18 +96,23 @@ def main():
                 print(label_id)
         if len(label_split) >= 2:
             try:
-                print(f"Creating nested label {label}")
-                label_object = {
-                    "name": label
-                }
-                label = service.users().labels().create(userId='me',
-                                                        body=label_object).execute()
-                label_id = label.get("id")
-                print(label_id)
-                current_labels.append({
-                    'name': label,
-                    'id': label_id
-                })
+                if label in current_labels:
+                    print(f"Label {label} already exists")
+                    label_id = get_label_id(service, current_labels, label)
+                    print(label_id)
+                else:
+                    print(f"Creating nested label {label}")
+                    label_object = {
+                        "name": label
+                    }
+                    label = service.users().labels().create(userId='me',
+                                                            body=label_object).execute()
+                    label_id = label.get("id")
+                    print(label_id)
+                    current_labels.append({
+                        'name': label,
+                        'id': label_id
+                    })
             except HttpError as e:
                 if '409' not in str(e):
                     print(f"Unexpected error occurred {e}") 
@@ -107,8 +121,12 @@ def main():
                     label_id = get_label_id(service, current_labels, label)
                     print(label_id)
         try:
-            filter_id = create_filter(service, item.get("domain"), label_id)
-            print(filter_id)
+            if item.get("domain") not in current_filters:
+                filter_id = create_filter(service, item.get("domain"), label_id)
+                print(filter_id)
+                current_filters.append(item.get("domain"))
+            else:
+                print(f"filter for {item.get('domain')} already exists")
         except HttpError as e:
             if '409' not in str(e):
                 print(f"Unexpected error occurred {e}") 
