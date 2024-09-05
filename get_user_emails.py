@@ -71,17 +71,20 @@ def main():
 
     messages = get_unlabeled_messages(service)
     res_dict = {}
-    for i, message in enumerate(messages):
-        print(f'Message {i} of {len(messages)}')
-        msg_id = message.get('id')
-        from_domain = get_from_domain(service, msg_id)
-        if from_domain not in res_dict:
-            res_dict[from_domain] = {
-                "message_ids": []
-            }
-        msg_ids = res_dict[from_domain].get('message_ids')
-        if msg_id not in msg_ids: 
-            res_dict[from_domain]['message_ids'].append(msg_id)
+    try:
+        for i, message in enumerate(messages):
+            print(f'Message {i} of {len(messages)}')
+            msg_id = message.get('id')
+            from_domain = get_from_domain(service, msg_id)
+            if from_domain not in res_dict:
+                res_dict[from_domain] = {
+                    "message_ids": []
+                }
+                msg_ids = res_dict[from_domain].get('message_ids')
+            if msg_id not in msg_ids:
+                res_dict[from_domain]['message_ids'].append(msg_id)
+    except KeyboardInterrupt:
+        print("Interrupt")
     f = open("res.json", "w")
     f.write(json.dumps(res_dict))
 
